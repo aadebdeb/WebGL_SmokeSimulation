@@ -173,6 +173,17 @@ uniform sampler2D u_velocityTexture;
 uniform float u_deltaTime;
 uniform float u_gridSpacing;
 
+vec2 sampleVelocity(ivec2 coord, ivec2 textureSize) {
+  vec2 velocity = texelFetch(u_velocityTexture, coord, 0).xy;
+  if (coord.x < 0 || coord.x >= textureSize.x) {
+    velocity.x = 0.0;
+  }
+  if (coord.y < 0 || coord.y >= textureSize.y) {
+    velocity.y = 0.0;
+  }
+  return velocity;
+}
+
 void main(void) {
   ivec2 coord = ivec2(gl_FragCoord.xy);
   vec2 position = (vec2(coord) + 0.5) * u_gridSpacing;
@@ -184,28 +195,13 @@ void main(void) {
   ivec2 i = ivec2(prevCoord);
   vec2 f = fract(prevCoord);
 
-  vec2 vel00 = texelFetch(u_velocityTexture, i, 0).xy;
-  vec2 vel10 = texelFetch(u_velocityTexture, i + ivec2(1, 0), 0).xy;
-  vec2 vel01 = texelFetch(u_velocityTexture, i + ivec2(0, 1), 0).xy;
-  vec2 vel11 = texelFetch(u_velocityTexture, i + ivec2(1, 1), 0).xy;
+  ivec2 textureSize = textureSize(u_velocityTexture, 0);
+  vec2 vel00 = sampleVelocity(i, textureSize);
+  vec2 vel10 = sampleVelocity(i + ivec2(1, 0), textureSize);
+  vec2 vel01 = sampleVelocity(i + ivec2(0, 1), textureSize);
+  vec2 vel11 = sampleVelocity(i + ivec2(1, 1), textureSize);
 
   o_velocity = mix(mix(vel00, vel10, f.x), mix(vel01, vel11, f.x), f.y);
-}
-`;
-
-  const DIFFUSE_VELOCITY_FRAGMENT_SHADER_SOURCE =
-`#version 300 es
-
-precision highp float;
-
-out vec2 o_velocity;
-
-uniform sampler2D u_velocityTexture;
-
-void main(void) {
-  ivec2 coord = ivec2(gl_FragCoord.xy);
-  vec2 velocity = texelFetch(u_velocityTexture, coord, 0).xy;
-  o_velocity = velocity;
 }
 `;
 
@@ -222,17 +218,47 @@ uniform float u_deltaTime;
 uniform float u_gridSpacing;
 uniform float u_density;
 
+vec2 sampleVelocity(ivec2 coord, ivec2 textureSize) {
+  vec2 velocity = texelFetch(u_velocityTexture, coord, 0).xy;
+  if (coord.x < 0 || coord.x >= textureSize.x) {
+    velocity.x = 0.0;
+  }
+  if (coord.y < 0 || coord.y >= textureSize.y) {
+    velocity.y = 0.0;
+  }
+  return velocity;
+}
+
+float samplePressure(ivec2 coord, ivec2 textureSize) {
+  if (coord.x < 0) {
+    coord.x = 0;
+  }
+  if (coord.x >= textureSize.x) {
+    coord.x = textureSize.x - 1;
+  }
+  if (coord.y < 0) {
+    coord.y = 0;
+  }
+  if (coord.y >= textureSize.y) {
+    coord.y = textureSize.y - 1;
+  }
+  return texelFetch(u_pressureTexture, coord, 0).x;
+}
+
 void main(void) {
   ivec2 coord = ivec2(gl_FragCoord.xy);
 
-  float pl = texelFetch(u_pressureTexture, coord + ivec2(-1, 0), 0).x;
-  float pr = texelFetch(u_pressureTexture, coord + ivec2(1, 0), 0).x;
-  float pd = texelFetch(u_pressureTexture, coord + ivec2(0, -1), 0).x;
-  float pu = texelFetch(u_pressureTexture, coord + ivec2(0, 1), 0).x;
-  vec2 vl = texelFetch(u_velocityTexture, coord + ivec2(-1, 0), 0).xy;
-  vec2 vr = texelFetch(u_velocityTexture, coord + ivec2(1, 0), 0).xy;
-  vec2 vd = texelFetch(u_velocityTexture, coord + ivec2(0, -1), 0).xy;
-  vec2 vu = texelFetch(u_velocityTexture, coord + ivec2(0, 1), 0).xy;
+  ivec2 pressTexSize = textureSize(u_pressureTexture, 0);
+  float pl = samplePressure(coord + ivec2(-1, 0), pressTexSize);
+  float pr = samplePressure(coord + ivec2(1, 0), pressTexSize);
+  float pd = samplePressure(coord + ivec2(0, -1), pressTexSize);
+  float pu = samplePressure(coord + ivec2(0, 1), pressTexSize);
+
+  ivec2 velTexSize = textureSize(u_velocityTexture, 0);
+  vec2 vl = sampleVelocity(coord + ivec2(-1, 0), velTexSize);
+  vec2 vr = sampleVelocity(coord + ivec2(1, 0), velTexSize);
+  vec2 vd = sampleVelocity(coord + ivec2(0, -1), velTexSize);
+  vec2 vu = sampleVelocity(coord + ivec2(0, 1), velTexSize);
 
   o_pressure = 0.25 * (pl + pr + pd + pu
     - 0.5 * (vr.x - vl.x + vu.y - vd.y) * u_gridSpacing * u_density / u_deltaTime);
@@ -252,14 +278,31 @@ uniform float u_deltaTime;
 uniform float u_gridSpacing;
 uniform float u_density;
 
+float samplePressure(ivec2 coord, ivec2 textureSize) {
+  if (coord.x < 0) {
+    coord.x = 0;
+  }
+  if (coord.x >= textureSize.x) {
+    coord.x = textureSize.x - 1;
+  }
+  if (coord.y < 0) {
+    coord.y = 0;
+  }
+  if (coord.y >= textureSize.y) {
+    coord.y = textureSize.y - 1;
+  }
+  return texelFetch(u_pressureTexture, coord, 0).x;
+}
+
 void main(void) {
   ivec2 coord = ivec2(gl_FragCoord.xy);
   vec2 velocity = texelFetch(u_velocityTexture, coord, 0).xy;
 
-  float pl = texelFetch(u_pressureTexture, coord + ivec2(-1, 0), 0).x;
-  float pr = texelFetch(u_pressureTexture, coord + ivec2(1, 0), 0).x;
-  float pd = texelFetch(u_pressureTexture, coord + ivec2(0, -1), 0).x;
-  float pu = texelFetch(u_pressureTexture, coord + ivec2(0, 1), 0).x;
+  ivec2 pressTexSize = textureSize(u_pressureTexture, 0);
+  float pl = samplePressure(coord + ivec2(-1, 0), pressTexSize);
+  float pr = samplePressure(coord + ivec2(1, 0), pressTexSize);
+  float pd = samplePressure(coord + ivec2(0, -1), pressTexSize);
+  float pu = samplePressure(coord + ivec2(0, 1), pressTexSize);
 
   o_velocity = velocity - 0.5 * u_deltaTime * vec2(pr - pl, pu - pd) / (u_gridSpacing * u_density);
 }
@@ -295,6 +338,16 @@ uniform sampler2D u_smokeTexture;
 uniform float u_deltaTime;
 uniform float u_gridSpacing;
 
+#define AMBIENT_TEMPERATURE 273.0
+
+vec2 sampleSmoke(ivec2 coord, ivec2 textureSize) {
+  vec2 smoke = texelFetch(u_smokeTexture, coord, 0).xy;
+  if (coord.x < 0 || coord.x >= textureSize.x || coord.y < 0 || coord.y >= textureSize.y) {
+    smoke = vec2(0.0, AMBIENT_TEMPERATURE);
+  }
+  return smoke;
+}
+
 void main(void) {
   ivec2 coord = ivec2(gl_FragCoord.xy);
   vec2 position = (vec2(coord) + 0.5) * u_gridSpacing;
@@ -306,10 +359,11 @@ void main(void) {
   ivec2 i = ivec2(prevCoord);
   vec2 f = fract(prevCoord);
 
-  vec2 smoke00 = texelFetch(u_smokeTexture, i, 0).xy;
-  vec2 smoke10 = texelFetch(u_smokeTexture, i + ivec2(1, 0), 0).xy;
-  vec2 smoke01 = texelFetch(u_smokeTexture, i + ivec2(0, 1), 0).xy;
-  vec2 smoke11 = texelFetch(u_smokeTexture, i + ivec2(1, 1), 0).xy;
+  ivec2 textureSize = textureSize(u_smokeTexture, 0);
+  vec2 smoke00 = sampleSmoke(i, textureSize);
+  vec2 smoke10 = sampleSmoke(i + ivec2(1, 0), textureSize);
+  vec2 smoke01 = sampleSmoke(i + ivec2(0, 1), textureSize);
+  vec2 smoke11 = sampleSmoke(i + ivec2(1, 1), textureSize);
 
   o_smoke = mix(mix(smoke00, smoke10, f.x), mix(smoke01, smoke11, f.x), f.y);
 }
@@ -351,15 +405,6 @@ void main(void) {
   nextDensity *= exp(-u_densityDecay * u_deltaTime);
 
   o_smoke = vec2(nextDensity, nextTemperature);
-}
-
-`;
-
-  const DIFFUSE_SCALAR_FRAGMENT_SHADER_SOURCE =
-`#version 300 es
-
-void main(void) {
-
 }
 
 `;
@@ -472,16 +517,13 @@ void main(void) {
 
   const parameters = {
     'grid spacing': 0.001,
-    'air density': 2.354,
-    'diffuse coef': 0.0,
-    'density diffuse': 0.0, 
-    'temperature diffuse': 0.0, 
+    'air density': 2.354, 
     'density force': 0.01,
     'temperature force': 0.0001,
     'heat radius': 0.1,
     'heat intensity': 1000.0,
     'velocity decay': 0.1,
-    'density decay': 1.0,
+    'density decay': 0.5,
     'temperature decay': 1.0,
     'time step': 0.005,
     'time scale': 1.0,
@@ -490,16 +532,13 @@ void main(void) {
   };
 
   const gui = new dat.GUI();
-  gui.add(parameters, 'diffuse coef', 0.0, 0.1).step(0.0001);
-  gui.add(parameters, 'density diffuse', 0.0, 0.1).step(0.0001);
-  gui.add(parameters, 'temperature diffuse', 0.0, 0.1).step(0.0001);
   gui.add(parameters, 'density force', 0.0, 0.1).step(0.0001);
   gui.add(parameters, 'temperature force', 0.0, 0.0003).step(0.00001);
   gui.add(parameters, 'heat radius', 0.0, 0.3).step(0.001);
   gui.add(parameters, 'heat intensity', 0.0, 2000.0).step(1.0);
   gui.add(parameters, 'velocity decay', 0.0, 5.0).step(0.1);
-  gui.add(parameters, 'density decay', 0.0, 10.0).step(0.1);
-  gui.add(parameters, 'temperature decay', 0.0, 10.0).step(0.1);
+  gui.add(parameters, 'density decay', 0.0, 5.0).step(0.1);
+  gui.add(parameters, 'temperature decay', 0.0, 5.0).step(0.1);
   gui.add(parameters, 'time step', 0.0001, 0.01).step(0.0001);
   gui.add(parameters, 'time scale', 0.5, 2.0).step(0.001);
   gui.add(parameters, 'render', ['density', 'temperature', 'velocity']);
@@ -513,29 +552,23 @@ void main(void) {
   const initializeSmokeProgram = createProgramFromSource(gl, FILL_VIEWPORT_VERTEX_SHADER_SOURCE, INITIALIZE_SMOKE_FRAGMENT_SHADER_SOURCE);
   const addBuoyancyForceProgram = createProgramFromSource(gl, FILL_VIEWPORT_VERTEX_SHADER_SOURCE, ADD_BUOYANCY_FORCE_FRAGMENT_SHADER_SOURCE);
   const advectVelocityProgram = createProgramFromSource(gl, FILL_VIEWPORT_VERTEX_SHADER_SOURCE, ADVECT_VELOCITY_FRAGMENT_SHADER_SOURCE);
-  const diffuseVelocityProgram = createProgramFromSource(gl, FILL_VIEWPORT_VERTEX_SHADER_SOURCE, DIFFUSE_VELOCITY_FRAGMENT_SHADER_SOURCE);
   const computePressureProgram = createProgramFromSource(gl, FILL_VIEWPORT_VERTEX_SHADER_SOURCE, COMPUTE_PRESSURE_FRAGMENT_SHADER_SOURCE);
   const addPressureForceProgram = createProgramFromSource(gl, FILL_VIEWPORT_VERTEX_SHADER_SOURCE, ADD_PRESSURE_FORCE_FRAGMENT_SHADER_SOURCE);
   const decayVelocityProgram = createProgramFromSource(gl, FILL_VIEWPORT_VERTEX_SHADER_SOURCE, DECAY_VELOCITY_FRAGMENT_SHADER_SOURCE);
   const advectSmokeProgram = createProgramFromSource(gl, FILL_VIEWPORT_VERTEX_SHADER_SOURCE, ADVECT_SMOKE_FRAGMENT_SHADER_SOURCE);
   const addSmokeProgram = createProgramFromSource(gl, FILL_VIEWPORT_VERTEX_SHADER_SOURCE, ADD_SMOKE_FRAGMENT_SHADER_SOURCE);
-  const diffuseScalarProgram = createProgramFromSource(gl, FILL_VIEWPORT_VERTEX_SHADER_SOURCE, DIFFUSE_SCALAR_FRAGMENT_SHADER_SOURCE);
   const renderVelocityProgram = createProgramFromSource(gl, FILL_VIEWPORT_VERTEX_SHADER_SOURCE, RENDER_VELOCITY_FRAGMENT_SHADER_SOURCE);
   const renderDensityProgram = createProgramFromSource(gl, FILL_VIEWPORT_VERTEX_SHADER_SOURCE, RENDER_DENSITY_FRAGMENT_SHADER_SOURCE);
   const renderTemperatureProgram = createProgramFromSource(gl, FILL_VIEWPORT_VERTEX_SHADER_SOURCE, RENDER_TEMPERATURE_FRAGMENT_SHADER_SOURCE);
 
-  const initializeVelocityUniforms = getUniformLocations(gl, initializeVelocityProgram, []);
-  const initializeSmokeUniforms = getUniformLocations(gl, initializeSmokeProgram, []);
   const addBuoyancyForceUniforms = getUniformLocations(gl, addBuoyancyForceProgram, ['u_velocityTexture', 'u_smokeTexture', 'u_deltaTime', 'u_densityScale', 'u_temperatureScale']);
   const advectVelocityUniforms = getUniformLocations(gl, advectVelocityProgram, ['u_velocityTexture', 'u_deltaTime', 'u_gridSpacing']);
-  const diffuseVelocityUniforms = getUniformLocations(gl, diffuseVelocityProgram, []);
   const computePressureUniforms = getUniformLocations(gl, computePressureProgram, ['u_velocityTexture', 'u_pressureTexture', 'u_deltaTime', 'u_gridSpacing', 'u_density']);
   const addPressureForceUniforms = getUniformLocations(gl, addPressureForceProgram, ['u_velocityTexture', 'u_pressureTexture', 'u_deltaTime', 'u_gridSpacing', 'u_density']);
   const decayVelocityUniforms = getUniformLocations(gl, decayVelocityProgram, ['u_velocityTexture', 'u_deltaTime', 'u_velocityDecay']);
   const advectSmokeUniforms = getUniformLocations(gl, advectSmokeProgram, ['u_velocityTexture', 'u_smokeTexture', 'u_deltaTime', 'u_gridSpacing']);
   const addSmokeUniforms = getUniformLocations(gl, addSmokeProgram,
     ['u_smokeTexture', 'u_deltaTime', 'u_gridSpacing', 'u_addHeat', 'u_heatSourceCenter', 'u_heatSourceRadius', 'u_heatSourceIntensity', 'u_densityDecay', 'u_temperatureDecay']);
-  const diffuseScalarUniforms = getUniformLocations(gl, diffuseScalarProgram, []);
   const renderVelocityUniforms = getUniformLocations(gl, renderVelocityProgram, ['u_velocityTexture']);
   const renderDensityUniforms = getUniformLocations(gl, renderDensityProgram, ['u_smokeTexture']);
   const renderTemperatureUniforms = getUniformLocations(gl, renderTemperatureProgram, ['u_smokeTexture']);
@@ -605,18 +638,6 @@ void main(void) {
       swapVelocityFbObj();
     };
 
-    const diffuseVelocity = function(deltaTime) {
-      gl.useProgram(diffuseVelocityProgram);
-      gl.uniform1f()
-      for (let i = 0; i < 20; i++) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, velocityFbObjW.framebuffer);
-        setUniformTexture(gl, 0, velocityFbObjR.velocityTexture, diffuseVelocityUniforms['u_velocityTexture']);
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-        swapVelocityFbObj();
-      }
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    };
-
     const advectVelocity = function(deltaTime) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, velocityFbObjW.framebuffer);
       gl.useProgram(advectVelocityProgram);
@@ -669,7 +690,6 @@ void main(void) {
 
     const updateVelocity = function(deltaTime) {
       addBuoyancyForce(deltaTime);
-      // diffuseVelocity(deltaTime);
       advectVelocity(deltaTime);
       computePressure(deltaTime);
       addPressureForce(deltaTime);
@@ -761,8 +781,6 @@ void main(void) {
         simulationSeconds += timeStep;
       }
       remaindedSimulationSeconds = nextSimulationSeconds - simulationSeconds;
-
-      // stepSimulation(timeStep);
 
       render();
       requestId = requestAnimationFrame(loop);
