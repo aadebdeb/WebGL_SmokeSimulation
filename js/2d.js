@@ -145,7 +145,6 @@ out vec2 o_velocity;
 uniform sampler2D u_velocityTexture;
 uniform sampler2D u_smokeTexture;
 uniform float u_deltaTime;
-uniform vec2 u_gravity;
 uniform float u_densityScale;
 uniform float u_temperatureScale;
 
