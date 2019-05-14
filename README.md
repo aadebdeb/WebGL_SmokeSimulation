@@ -1,4 +1,4 @@
-# GPGPU Smoke Simulation in WebGL2
+# GPGPU Smoke Simulation in WebGL
 
 ## 2D
 
